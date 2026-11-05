@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { JSX as ReactJSX } from "react";
 import type { DragEvent } from "react";
 import {
   UploadCloud,
@@ -10,6 +11,12 @@ import {
   AlertCircle,
   FolderOpen,
 } from "lucide-react";
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements extends ReactJSX.IntrinsicElements {}
+  }
+}
 
 interface UploadedFile {
   id: number;
@@ -138,7 +145,7 @@ function Upload() {
       return <FileImage />;
     }
 
-    if (file.name.toLowerCase().endsWith(".pdf")) {
+    if (file.name.endsWith(".pdf")) {
       return <FileText />;
     }
 
@@ -148,7 +155,7 @@ function Upload() {
   return (
     <div className="upload-page">
 
-      <div className="page-heading">
+<div className="page-heading">
         <div>
           <h1>Upload Documents</h1>
           <p>Upload and organize all your documents in one place.</p>

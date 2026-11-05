@@ -96,7 +96,7 @@ function LanguageBridge() {
       {/* Progress */}
 
       <div className="translation-progress">
-        {["Original Tamil", "English Translation", "Revised Tamil"].map(
+        {["Original", "Translation", "Revised"].map(
           (label, index) => (
             <div
               key={label}
