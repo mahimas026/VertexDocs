@@ -37,3 +37,8 @@ storage/
 *.log
 *.sqlite3
 *.db
+
+.env
+
+.env
+**/.env
