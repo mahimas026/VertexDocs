@@ -9,7 +9,7 @@ import Convert from "./pages/Convert";
 import Templates from "./pages/Templates";
 import AIDocuments from "./pages/AIDocuments";
 import Account from "./pages/Account";
-
+import HelpSupport from "./pages/HelpSupport";
 import "./App.css";
 
 function App() {
@@ -27,6 +27,7 @@ function App() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/ai-documents" element={<AIDocuments />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/help-support" element={<HelpSupport />} />
         </Routes>
       </main>
     </div>

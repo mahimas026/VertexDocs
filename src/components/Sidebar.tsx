@@ -52,10 +52,15 @@ function Sidebar() {
       </nav>
 
       <div className="sidebar-bottom">
-        <a><HelpCircle /> Help & Support</a>
-        <NavLink to="/account">
-          <Settings /> Account Settings
-        </NavLink>
+      <NavLink to="/help-support">
+  <HelpCircle />
+  Help & Support
+</NavLink>
+
+<NavLink to="/account">
+  <Settings />
+  Account Settings
+</NavLink>
       </div>
     </aside>
   );
