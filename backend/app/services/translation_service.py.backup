@@ -1,0 +1,189 @@
+
+import argostranslate.translate
+import argostranslate.sbd
+import ctranslate2
+
+
+# Cache initialized translation models
+_TRANSLATOR_CACHE = {}
+
+
+# Vertex-Docs: 12 supported languages
+SUPPORTED_LANGUAGES = [
+    {"code": "en", "name": "English", "script": "Latin"},
+    {"code": "ta", "name": "Tamil", "script": "Tamil"},
+    {"code": "hi", "name": "Hindi", "script": "Devanagari"},
+    {"code": "ml", "name": "Malayalam", "script": "Malayalam"},
+    {"code": "te", "name": "Telugu", "script": "Telugu"},
+    {"code": "ja", "name": "Japanese", "script": "Japanese"},
+    {"code": "de", "name": "German", "script": "Latin"},
+    {"code": "sa", "name": "Sanskrit", "script": "Devanagari"},
+    {"code": "kn", "name": "Kannada", "script": "Kannada"},
+    {"code": "bn", "name": "Bengali", "script": "Bengali"},
+    {"code": "fr", "name": "French", "script": "Latin"},
+    {"code": "es", "name": "Spanish", "script": "Latin"}
+]
+
+
+def translate_text(text: str, source_lang: str, target_lang: str) -> str:
+    """
+    Translate text using locally installed Argos Translate packages.
+
+    Bengali uses MiniSBD because its bundled Stanza resources
+    are incomplete.
+
+    Other languages use the normal Argos translation method.
+    """
+
+    if not text or not text.strip():
+        raise ValueError("Text cannot be empty")
+
+    configured_codes = {
+        language["code"] for language in SUPPORTED_LANGUAGES
+    }
+
+    if source_lang not in configured_codes:
+        raise ValueError("Unsupported source language")
+
+    if target_lang not in configured_codes:
+        raise ValueError("Unsupported target language")
+
+    if source_lang == target_lang:
+        return text
+
+    installed_languages = (
+        argostranslate.translate.get_installed_languages()
+    )
+
+    source_language = next(
+        (lang for lang in installed_languages if lang.code == source_lang),
+        None
+    )
+
+    target_language = next(
+        (lang for lang in installed_languages if lang.code == target_lang),
+        None
+    )
+
+    if source_language is None or target_language is None:
+        raise ValueError(
+            "Source or target language package is not installed"
+        )
+
+    translation = source_language.get_translation(target_language)
+
+    if translation is None:
+        raise ValueError(
+            f"Translation from {source_lang} to {target_lang} is not installed"
+        )
+
+    # Bengali-specific MiniSBD fallback
+    if source_lang == "bn":
+
+        package = translation.underlying.pkg
+
+        # Initialize Bengali sentence detector
+        sentencizer = argostranslate.sbd.MiniSBDSentencizer(
+            package
+        )
+
+        # Get existing translator
+        translator = translation.underlying.translator
+
+        # Initialize CTranslate2 if translator is not loaded
+        if translator is None:
+
+            model_path = str(package.package_path / "model")
+
+            if model_path not in _TRANSLATOR_CACHE:
+
+                settings = argostranslate.translate.settings
+
+                _TRANSLATOR_CACHE[model_path] = (
+                    ctranslate2.Translator(
+                        model_path,
+                        device=settings.device,
+                        inter_threads=settings.inter_threads,
+                        intra_threads=settings.intra_threads,
+                        compute_type=settings.compute_type
+                    )
+                )
+
+            translator = _TRANSLATOR_CACHE[model_path]
+
+        # Perform Bengali translation
+        result = argostranslate.translate.apply_packaged_translation(
+            package,
+            text,
+            translator,
+            sentencizer,
+            num_hypotheses=1
+        )
+
+        return result[0].value
+
+    # Normal Argos translation for other languages
+    return translation.translate(text)
+
+
+def get_supported_languages():
+    """
+    Return all 12 configured languages and actual translation availability.
+    """
+
+    installed_languages = (
+        argostranslate.translate.get_installed_languages()
+    )
+
+    installed_codes = {
+        language.code for language in installed_languages
+    }
+
+    translation_pairs = []
+    available_codes = set()
+
+    for source in installed_languages:
+        for target in source.translations_from:
+
+            translation_pairs.append({
+                "source": source.code,
+                "target": target.to_lang.code
+            })
+
+            available_codes.add(source.code)
+            available_codes.add(target.to_lang.code)
+
+    languages = []
+
+    for language in SUPPORTED_LANGUAGES:
+
+        code = language["code"]
+        is_installed = code in installed_codes
+        is_available = code in available_codes
+
+        if is_available:
+            status = "available"
+        elif is_installed:
+            status = "installed_no_translation_pairs"
+        else:
+            status = "not_installed"
+
+        languages.append({
+            **language,
+            "configured": True,
+            "installed": is_installed,
+            "available": is_available,
+            "status": status
+        })
+
+    return {
+        "total_configured": len(languages),
+        "total_installed": sum(
+            item["installed"] for item in languages
+        ),
+        "total_available": sum(
+            item["available"] for item in languages
+        ),
+        "languages": languages,
+        "translation_pairs": translation_pairs
+    }
