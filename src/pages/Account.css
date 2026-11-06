@@ -136,6 +136,16 @@
   background: #5b21b6;
 }
 
+.premium-account-card {
+  border-color: #e6dcf3;
+  background: linear-gradient(120deg, #fff 45%, #faf7ff);
+}
+
+.premium-account-icon {
+  background: #f1ebf8;
+  color: #9673d3;
+}
+
 .show-password-btn {
   border: 1px solid #e2e8f0;
   background: white;

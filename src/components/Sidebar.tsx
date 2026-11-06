@@ -8,6 +8,7 @@ import {
   Bot,
   Settings,
   HelpCircle,
+  Files,
 } from "lucide-react";
 
 function Sidebar() {
@@ -39,6 +40,10 @@ function Sidebar() {
 
         <NavLink to="/convert">
           <RefreshCw /> Convert Files
+        </NavLink>
+
+        <NavLink to="/templates">
+          <Files /> Templates
         </NavLink>
 
         <NavLink to="/ai-documents">

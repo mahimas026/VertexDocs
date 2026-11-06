@@ -9,7 +9,9 @@ import {
   Save,
   Eye,
   Trash2,
+  Crown,
 } from "lucide-react";
+import PremiumPlansModal from "../components/PremiumPlansModal";
 import "./Account.css";
 
 export default function Account() {
@@ -19,6 +21,7 @@ export default function Account() {
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
 
   const handleSave = () => {
     setMessage("Profile changes saved in this demo.");
@@ -91,6 +94,30 @@ export default function Account() {
             <button className="account-primary-btn" onClick={handleSave}>
               <Save size={17} />
               Save Changes
+            </button>
+          </section>
+
+          {/* Premium */}
+          <section className="account-card premium-account-card">
+            <div className="account-card-heading">
+              <div className="account-icon premium-account-icon">
+                <Crown size={21} />
+              </div>
+              <div>
+                <h2>Vertex Premium</h2>
+                <p>
+                  Unlock advanced document productivity and exclusive premium
+                  features.
+                </p>
+              </div>
+            </div>
+
+            <button
+              className="account-primary-btn"
+              onClick={() => setIsPremiumModalOpen(true)}
+            >
+              <Crown size={17} />
+              View Premium Plans
             </button>
           </section>
 
@@ -240,6 +267,10 @@ export default function Account() {
 
         </aside>
       </div>
+
+      {isPremiumModalOpen && (
+        <PremiumPlansModal onClose={() => setIsPremiumModalOpen(false)} />
+      )}
     </div>
   );
 }

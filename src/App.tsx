@@ -6,6 +6,7 @@ import Upload from "./pages/upload";
 import PDFStudio from "./pages/PDFStudio";
 import LanguageBridge from "./pages/LanguageBridge";
 import Convert from "./pages/Convert";
+import Templates from "./pages/Templates";
 import AIDocuments from "./pages/AIDocuments";
 import Account from "./pages/Account";
 
@@ -23,6 +24,7 @@ function App() {
           <Route path="/pdf-studio" element={<PDFStudio />} />
           <Route path="/language-bridge" element={<LanguageBridge />} />
           <Route path="/convert" element={<Convert />} />
+          <Route path="/templates" element={<Templates />} />
           <Route path="/ai-documents" element={<AIDocuments />} />
           <Route path="/account" element={<Account />} />
         </Routes>

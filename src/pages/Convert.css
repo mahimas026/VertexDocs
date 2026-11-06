@@ -1,0 +1,232 @@
+.convert-page .compression-card {
+  margin-top: 22px;
+  padding: 26px;
+  background: #fff;
+  border: 1px solid #e8e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(37, 37, 77, 0.04);
+}
+
+.convert-page .compression-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.convert-page .compression-heading h2 {
+  margin: 4px 0 8px;
+  font-size: 19px;
+}
+
+.convert-page .compression-heading p:last-child {
+  max-width: 720px;
+  margin: 0;
+  color: #858ba0;
+  line-height: 1.55;
+}
+
+.convert-page .compression-eyebrow {
+  margin: 0;
+  color: #7065e9;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+}
+
+.convert-page .compression-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.convert-page .compression-option {
+  display: flex;
+  min-height: 80px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  padding: 13px 15px;
+  color: #27263d;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #dddde8;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.convert-page .compression-option:hover {
+  border-color: #9c95f1;
+}
+
+.convert-page .compression-option.is-selected {
+  background: #f5f4ff;
+  border-color: #7065e9;
+  box-shadow: 0 0 0 2px rgba(112, 101, 233, 0.12);
+}
+
+.convert-page .compression-option-title {
+  font-weight: 700;
+}
+
+.convert-page .compression-option-description {
+  color: #858ba0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.convert-page .compression-size-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.convert-page .compression-size-details > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f8f8fc;
+  border: 1px solid #eeeef5;
+  border-radius: 8px;
+}
+
+.convert-page .compression-size-details span {
+  color: #858ba0;
+  font-size: 13px;
+}
+
+.convert-page .compression-size-details strong {
+  color: #27263d;
+  font-size: 14px;
+}
+
+.convert-page .compression-note {
+  margin: 14px 0 0;
+  color: #777d91;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.convert-page .compression-start-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 20px;
+  padding: 12px 18px;
+  color: #fff;
+  font-weight: 650;
+  background: #7065e9;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.convert-page .compression-start-btn:hover:not(:disabled) {
+  background: #5c51d2;
+}
+
+.convert-page .compression-start-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.convert-page .compression-progress {
+  margin-top: 20px;
+}
+
+.convert-page .compression-progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: #777d91;
+  font-size: 13px;
+}
+
+.convert-page .compression-progress-label strong {
+  color: #27263d;
+}
+
+.convert-page .compression-progress-track {
+  height: 8px;
+  overflow: hidden;
+  background: #ecebf5;
+  border-radius: 99px;
+}
+
+.convert-page .compression-progress-fill {
+  height: 100%;
+  background: #7065e9;
+  border-radius: inherit;
+  transition: width 180ms ease;
+}
+
+.convert-page .compression-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  color: #555b70;
+  font-size: 13px;
+  line-height: 1.45;
+  background: #f5f4ff;
+  border: 1px solid #e5e2ff;
+  border-radius: 8px;
+}
+
+.convert-page .compression-result button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 12px;
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+  background: #7065e9;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.convert-page .compression-result button:hover {
+  background: #5c51d2;
+}
+
+.convert-page .compression-option:focus-visible,
+.convert-page .compression-start-btn:focus-visible,
+.convert-page .compression-result button:focus-visible {
+  outline: 3px solid rgba(112, 101, 233, 0.35);
+  outline-offset: 2px;
+}
+
+@media (max-width: 700px) {
+  .convert-page .compression-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .convert-page .compression-card {
+    padding: 19px;
+  }
+
+  .convert-page .compression-result {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .convert-page .compression-result button {
+    width: 100%;
+  }
+}
