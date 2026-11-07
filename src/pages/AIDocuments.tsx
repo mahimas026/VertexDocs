@@ -15,6 +15,10 @@ import {
   Loader2,
   UploadCloud,
   Languages,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { AttachedDocument, ChatMessage, ReplyLanguage } from "../ai/types";
 import {
@@ -24,6 +28,12 @@ import {
 } from "../ai/extract";
 import { sendToLLM } from "../ai/llmClient";
 import { MarkdownRenderer } from "../ai/markdown";
+import {
+  getVoiceLanguageTag,
+  speakText,
+  stopSpeaking,
+} from "../ai/voice";
+import { useSpeechRecognition } from "../ai/useSpeechRecognition";
 import "./AIDocuments.css";
 
 const suggestions = [
@@ -59,6 +69,11 @@ export default function AIDocuments() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [replyLanguage, setReplyLanguage] = useState<ReplyLanguage>("auto");
 
+  // Voice Assistant states
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [autoSendAfterSpeaking, setAutoSendAfterSpeaking] = useState(false);
+  const [autoReadReplies, setAutoReadReplies] = useState(false);
+
   const isGroqConfigured = Boolean(
     import.meta.env.VITE_GROQ_API_KEY &&
       import.meta.env.VITE_GROQ_API_KEY !== "your_groq_key_here" &&
@@ -69,10 +84,83 @@ export default function AIDocuments() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const autoReadRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    autoReadRef.current = autoReadReplies;
+  }, [autoReadReplies]);
+
   // Auto-scroll to the bottom of the chat area on message update or loading state change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  // Adjust textarea height when input changes (e.g. from speech or reset)
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(
+        textareaRef.current.scrollHeight,
+        120
+      )}px`;
+    }
+  }, [input]);
+
+  const stopVoiceOutput = () => {
+    stopSpeaking();
+    setSpeakingMessageId(null);
+  };
+
+  const {
+    isListening,
+    voiceStatus,
+    isRecognitionSupported,
+    toggleVoiceInput,
+    stopVoiceInput,
+    notifyManualInput,
+  } = useSpeechRecognition({
+    input,
+    setInput,
+    replyLanguage,
+    autoSendAfterSpeaking,
+    onSend: (text) => void handleSend(text),
+    onBeforeStart: stopVoiceOutput,
+  });
+
+  // Clean up voice synthesis on unmount
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, []);
+
+  const toggleReadMessage = (messageId: string, text: string) => {
+    if (speakingMessageId === messageId) {
+      stopVoiceOutput();
+      return;
+    }
+
+    // Stop microphone if currently listening
+    stopVoiceInput();
+
+    setSpeakingMessageId(messageId);
+    const langTag = getVoiceLanguageTag(replyLanguage);
+
+    speakText(
+      text,
+      langTag,
+      () => {
+        setSpeakingMessageId((current) =>
+          current === messageId ? null : current
+        );
+      },
+      () => {
+        setSpeakingMessageId((current) =>
+          current === messageId ? null : current
+        );
+      }
+    );
+  };
 
   const handleFiles = async (filesToAdd: File[]) => {
     setFileError("");
@@ -127,10 +215,13 @@ export default function AIDocuments() {
   };
 
   const clearChat = () => {
+    stopVoiceInput();
+    stopVoiceOutput();
     setMessages([]);
     setAttachments([]);
     setFileError("");
     setInput("");
+    notifyManualInput("");
     setReplyLanguage("auto");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -141,6 +232,9 @@ export default function AIDocuments() {
   };
 
   const handleSend = async (forcedPrompt?: string) => {
+    // Automatically stop listening when message is sent
+    stopVoiceInput();
+
     const promptToSend = (forcedPrompt ?? input).trim();
     if (!promptToSend && attachments.length === 0) return;
     if (isLoading) return;
@@ -151,6 +245,7 @@ export default function AIDocuments() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    notifyManualInput("");
     setFileError("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -166,8 +261,12 @@ export default function AIDocuments() {
       );
 
       const assistantMessage = createMessage("assistant", response);
-
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Auto-read reply aloud if toggle is ON
+      if (autoReadRef.current) {
+        toggleReadMessage(assistantMessage.id, response);
+      }
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "An unexpected error occurred.";
@@ -210,6 +309,7 @@ export default function AIDocuments() {
 
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
+    notifyManualInput(e.target.value);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${Math.min(
@@ -434,27 +534,61 @@ export default function AIDocuments() {
                             {message.role === "user" ? "You" : "Vertex AI"}
                           </strong>
                           {message.role === "assistant" && (
-                            <button
-                              type="button"
-                              className="ai-copy-button"
-                              onClick={() =>
-                                void copyToClipboard(message.id, message.text)
-                              }
-                              aria-label="Copy response"
-                              title="Copy response"
-                            >
-                              {copiedId === message.id ? (
-                                <>
-                                  <Check size={13} />
-                                  <span>Copied</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy size={13} />
-                                  <span>Copy</span>
-                                </>
-                              )}
-                            </button>
+                            <div className="ai-message-actions">
+                              <button
+                                type="button"
+                                className={`ai-speak-button ${
+                                  speakingMessageId === message.id ? "is-speaking" : ""
+                                }`}
+                                onClick={() =>
+                                  toggleReadMessage(message.id, message.text)
+                                }
+                                aria-label={
+                                  speakingMessageId === message.id
+                                    ? "Stop reading aloud"
+                                    : "Read message aloud"
+                                }
+                                title={
+                                  speakingMessageId === message.id
+                                    ? "Stop reading"
+                                    : "Read aloud"
+                                }
+                              >
+                                {speakingMessageId === message.id ? (
+                                  <>
+                                    <VolumeX size={13} />
+                                    <span>Stop</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Volume2 size={13} />
+                                    <span>Read</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="ai-copy-button"
+                                onClick={() =>
+                                  void copyToClipboard(message.id, message.text)
+                                }
+                                aria-label="Copy response"
+                                title="Copy response"
+                              >
+                                {copiedId === message.id ? (
+                                  <>
+                                    <Check size={13} />
+                                    <span>Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy size={13} />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           )}
                         </div>
 
@@ -545,30 +679,73 @@ export default function AIDocuments() {
         {/* Input area */}
         <div className="ai-input-area">
           <div className="ai-input-toolbar">
-            <div className="ai-lang-selector-pill">
-              <label htmlFor="ai-reply-lang-select" className="ai-lang-label">
-                <Languages size={14} />
-                <span>Reply in</span>
-              </label>
-              <select
-                id="ai-reply-lang-select"
-                className="ai-lang-select"
-                value={replyLanguage}
-                onChange={(e) =>
-                  setReplyLanguage(e.target.value as ReplyLanguage)
-                }
-                aria-label="Reply in"
-                disabled={isLoading}
-              >
-                <option value="auto">Auto (same as my question)</option>
-                <option value="english">English</option>
-                <option value="tamil">Tamil (தமிழ்)</option>
-                <option value="tanglish">Tanglish (Tamil in English letters)</option>
-                <option value="hindi">Hindi (हिन्दी)</option>
-                <option value="japanese">Japanese (日本語)</option>
-                <option value="german">German (Deutsch)</option>
-              </select>
+            <div className="ai-toolbar-left">
+              <div className="ai-lang-selector-pill">
+                <label htmlFor="ai-reply-lang-select" className="ai-lang-label">
+                  <Languages size={14} />
+                  <span>Reply in</span>
+                </label>
+                <select
+                  id="ai-reply-lang-select"
+                  className="ai-lang-select"
+                  value={replyLanguage}
+                  onChange={(e) =>
+                    setReplyLanguage(e.target.value as ReplyLanguage)
+                  }
+                  aria-label="Reply in"
+                  disabled={isLoading}
+                >
+                  <option value="auto">Auto (same as my question)</option>
+                  <option value="english">English</option>
+                  <option value="tamil">Tamil (தமிழ்)</option>
+                  <option value="tanglish">Tanglish (Tamil in English letters)</option>
+                  <option value="hindi">Hindi (हिन्दी)</option>
+                  <option value="japanese">Japanese (日本語)</option>
+                  <option value="german">German (Deutsch)</option>
+                </select>
+              </div>
+
+              <div className="ai-voice-toggles">
+                <label
+                  className="ai-toggle-label"
+                  title="Auto-send message after you finish speaking"
+                >
+                  <input
+                    type="checkbox"
+                    checked={autoSendAfterSpeaking}
+                    onChange={(e) => setAutoSendAfterSpeaking(e.target.checked)}
+                    aria-label="Auto-send after speaking"
+                  />
+                  <span>Auto-send</span>
+                </label>
+
+                <label
+                  className="ai-toggle-label"
+                  title="Automatically read assistant responses aloud"
+                >
+                  <input
+                    type="checkbox"
+                    checked={autoReadReplies}
+                    onChange={(e) => setAutoReadReplies(e.target.checked)}
+                    aria-label="Auto-read replies"
+                  />
+                  <span>Auto-read</span>
+                </label>
+              </div>
             </div>
+
+            {voiceStatus && (
+              <div
+                className={`ai-voice-status ${
+                  isListening ? "is-listening" : "is-error"
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                {isListening && <span className="ai-voice-pulse" />}
+                <span>{voiceStatus}</span>
+              </div>
+            )}
           </div>
 
           <div className="ai-input-row">
@@ -602,6 +779,23 @@ export default function AIDocuments() {
               disabled={isLoading}
               aria-label="Ask about document"
             />
+
+            <button
+              type="button"
+              className={`mic-button ${isListening ? "is-listening" : ""}`}
+              title={
+                !isRecognitionSupported
+                  ? "Voice input works in Chrome or Edge"
+                  : isListening
+                  ? "Stop listening"
+                  : "Voice input (speak)"
+              }
+              aria-label={isListening ? "Stop listening" : "Start voice input"}
+              disabled={isLoading || !isRecognitionSupported}
+              onClick={toggleVoiceInput}
+            >
+              {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+            </button>
 
             <button
               type="button"

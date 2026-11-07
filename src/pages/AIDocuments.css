@@ -316,6 +316,13 @@
   margin-bottom: 4px;
 }
 
+.ai-message-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ai-speak-button,
 .ai-copy-button {
   display: inline-flex;
   align-items: center;
@@ -330,10 +337,18 @@
   transition: all 150ms ease;
 }
 
+.ai-speak-button:hover,
 .ai-copy-button:hover {
   background: #e9e0f5;
   border-color: var(--ai-secondary);
   color: var(--ai-primary);
+}
+
+.ai-speak-button.is-speaking {
+  background: #ede0fa;
+  border-color: var(--ai-primary);
+  color: var(--ai-primary);
+  font-weight: 500;
 }
 
 /* Error message box inside chat bubble */
@@ -596,7 +611,106 @@
 .ai-input-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-toolbar-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-voice-toggles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--ai-light);
+  border: 1px solid #dfd3ee;
+  color: #5c4774;
+  font-size: 11.5px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.ai-toggle-label:hover {
+  background: #ece2f7;
+  border-color: var(--ai-secondary);
+}
+
+.ai-toggle-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid #a894c2;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  transition: all 150ms ease;
+}
+
+.ai-toggle-label input[type="checkbox"]:checked {
+  background: var(--ai-primary);
+  border-color: var(--ai-primary);
+}
+
+.ai-toggle-label input[type="checkbox"]:checked::after {
+  content: "";
+  display: block;
+  width: 3px;
+  height: 6px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg) translate(-0.5px, -0.5px);
+}
+
+.ai-voice-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: #6d5b84;
+  padding: 2px 8px;
+  border-radius: 6px;
+  animation: ai-bubble-pop 180ms ease both;
+}
+
+.ai-voice-status.is-listening {
+  color: var(--ai-primary);
+  font-weight: 500;
+}
+
+.ai-voice-status.is-error {
+  color: #b02a2a;
+  background: #fdf2f2;
+  border: 1px solid #f6cfcf;
+}
+
+.ai-voice-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ai-primary);
+  animation: ai-dot-pulse 1.2s infinite ease-in-out;
 }
 
 .ai-lang-selector-pill {
@@ -698,6 +812,7 @@
 }
 
 .ai-page .attach-button,
+.ai-page .mic-button,
 .ai-page .send-button {
   display: flex;
   width: 43px;
@@ -708,22 +823,32 @@
   border-radius: 11px;
 }
 
-.ai-page .attach-button {
+.ai-page .attach-button,
+.ai-page .mic-button {
   background: #f2eef7;
   color: #655773;
   cursor: pointer;
-  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+  position: relative;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
-.ai-page .attach-button:not(:disabled):hover {
+.ai-page .attach-button:not(:disabled):hover,
+.ai-page .mic-button:not(:disabled):hover {
   background: #e9e1f5;
   color: var(--ai-primary);
   transform: translateY(-1px);
 }
 
-.ai-page .attach-button:disabled {
-  opacity: 0.5;
+.ai-page .attach-button:disabled,
+.ai-page .mic-button:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+.ai-page .mic-button.is-listening {
+  background: var(--ai-primary);
+  color: #fff;
+  animation: ai-mic-pulse 1.6s infinite ease-out;
 }
 
 .ai-page .send-button {
@@ -741,6 +866,18 @@
 .ai-page .send-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@keyframes ai-mic-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(150, 115, 211, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(150, 115, 211, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(150, 115, 211, 0);
+  }
 }
 
 .ai-disclaimer {
@@ -925,6 +1062,13 @@
     padding: 2px 8px;
     font-size: 11px;
   }
+
+  .ai-page .attach-button,
+  .ai-page .mic-button,
+  .ai-page .send-button {
+    width: 38px;
+    height: 38px;
+  }
 }
 
 @media (max-width: 380px) {
@@ -950,7 +1094,8 @@
   .ai-robot,
   .ai-speech-bubble,
   .ai-typing-dot,
-  .chip-spinner {
+  .chip-spinner,
+  .ai-page .mic-button {
     animation: none;
   }
 
