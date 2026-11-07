@@ -378,6 +378,18 @@ body {
   font-size: 14px;
 }
 
+.upload-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #edfcf4;
+  color: #1a7f53;
+  padding: 15px;
+  border-radius: 9px;
+  margin-top: 20px;
+  font-size: 14px;
+}
+
 .file-section {
   margin-top: 35px;
 }

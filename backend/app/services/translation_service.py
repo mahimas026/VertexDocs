@@ -6,6 +6,22 @@ from pathlib import Path
 import argostranslate.translate
 import argostranslate.sbd
 import ctranslate2
+import os
+from dotenv import load_dotenv
+from google import genai
+import json
+import urllib.parse
+import urllib.request
+
+load_dotenv()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+gemini_client = (
+    genai.Client(api_key=GEMINI_API_KEY)
+    if GEMINI_API_KEY
+    else None
+)
 
 from app.language_config import SUPPORTED_LANGUAGES
 
@@ -53,10 +69,31 @@ _MODEL_NAME = None
 # Only one model stays in memory at a time.
 # --------------------------------------------------
 
+def _check_indic_available():
+    """Check whether IndicTrans2 dependencies are installed."""
+    try:
+        import torch  # noqa: F401
+        from transformers import AutoTokenizer  # noqa: F401
+        from IndicTransToolkit import IndicProcessor  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+INDIC_AVAILABLE = _check_indic_available()
+
+
 def load_indic_model(direction):
 
     global _MODEL_CACHE
     global _MODEL_NAME
+
+    if not INDIC_AVAILABLE:
+        raise ValueError(
+            "IndicTrans2 translation is not available. "
+            "Required packages (torch, transformers, IndicTransToolkit) "
+            "are not installed on this server."
+        )
 
     import torch
 
@@ -83,6 +120,18 @@ def load_indic_model(direction):
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+    # Check that the model files actually exist locally.
+    model_hf_dir = (
+        HF_CACHE
+        / f"models--{model_name.replace('/', '--')}"
+    )
+
+    if not model_hf_dir.exists():
+        raise ValueError(
+            f"IndicTrans2 model '{model_name}' is not cached locally. "
+            f"Download the model files before using this translation pair."
+        )
 
     print(f"Loading IndicTrans2 model: {model_name}")
 
@@ -329,12 +378,134 @@ def argos_translate(text, source_lang, target_lang):
         return result[0].value
 
     return translation.translate(text)
+def gemini_translate(
+    text: str,
+    source_lang: str,
+    target_lang: str
+) -> str:
 
+    if gemini_client is None:
+        raise ValueError("Gemini API key is not configured.")
 
+    language_names = {
+        language["code"]: language["name"]
+        for language in SUPPORTED_LANGUAGES
+    }
+
+    source_name = language_names.get(source_lang, source_lang)
+    target_name = language_names.get(target_lang, target_lang)
+
+    prompt = f"""
+Translate the following text from {source_name} to {target_name}.
+
+Rules:
+1. Preserve the original meaning.
+2. Use natural and grammatically correct language.
+3. Do not explain the translation.
+4. Return only the translated text.
+5. Preserve formatting where possible.
+
+Text:
+{text}
+"""
+
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
+        translated_text = response.text
+
+        if not translated_text:
+            raise ValueError("Gemini returned an empty translation.")
+
+        return translated_text.strip()
+
+    except Exception as error:
+        raise ValueError(
+            f"Gemini translation failed: {error}"
+        ) from error
+
+def mymemory_translate(
+    text: str,
+    source_lang: str,
+    target_lang: str
+) -> str:
+
+    def split_into_chunks(value: str, max_bytes: int = 400):
+        chunks = []
+
+        while value:
+            byte_count = 0
+            end = 0
+
+            for index, char in enumerate(value):
+                char_size = len(char.encode("utf-8"))
+
+                if byte_count + char_size > max_bytes:
+                    break
+
+                byte_count += char_size
+                end = index + 1
+
+            if end == 0:
+                raise ValueError("Unable to split text for translation.")
+
+            if end < len(value):
+                for index in range(end - 1, -1, -1):
+                    if value[index].isspace():
+                        end = index + 1
+                        break
+
+            chunks.append(value[:end])
+            value = value[end:]
+
+        return chunks
+
+    def translate_chunk(chunk: str) -> str:
+        params = urllib.parse.urlencode({
+            "q": chunk,
+            "langpair": f"{source_lang}|{target_lang}"
+        })
+
+        url = f"https://api.mymemory.translated.net/get?{params}"
+
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "VertexDocs/1.0"}
+        )
+
+        with urllib.request.urlopen(request, timeout=20) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        if str(data.get("responseStatus")) != "200":
+            raise ValueError(
+                data.get("responseDetails", "Translation failed")
+            )
+
+        translated = data.get("responseData", {}).get("translatedText")
+
+        if not translated:
+            raise ValueError("Empty translation received.")
+
+        return translated
+
+    try:
+        chunks = split_into_chunks(text)
+        translated_chunks = [
+            translate_chunk(chunk) for chunk in chunks
+        ]
+
+        return "".join(translated_chunks).strip()
+
+    except Exception as error:
+        raise ValueError(
+            f"MyMemory translation failed: {error}"
+        ) from error
 # --------------------------------------------------
 # MAIN TRANSLATION FUNCTION
 # --------------------------------------------------
-
 def translate_text(
     text: str,
     source_lang: str,
@@ -358,61 +529,9 @@ def translate_text(
     if source_lang == target_lang:
         return text
 
-    source_supported = source_lang in INDIC_LANGUAGE_CODES
-    target_supported = target_lang in INDIC_LANGUAGE_CODES
-
-    # Both languages supported by IndicTrans2.
-    if source_supported and target_supported:
-
-        source_code = INDIC_LANGUAGE_CODES[source_lang]
-        target_code = INDIC_LANGUAGE_CODES[target_lang]
-
-        # English -> Indian language.
-        if source_lang == "en":
-
-            return indictrans_translate(
-                text,
-                source_code,
-                target_code,
-                "en-indic"
-            )
-
-        # Indian language -> English.
-        if target_lang == "en":
-
-            return indictrans_translate(
-                text,
-                source_code,
-                target_code,
-                "indic-en"
-            )
-
-        # Indian language -> Indian language.
-        # First translate to English.
-        english_text = indictrans_translate(
-            text,
-            source_code,
-            "eng_Latn",
-            "indic-en"
-        )
-
-        # Then translate English to target language.
-        return indictrans_translate(
-            english_text,
-            "eng_Latn",
-            target_code,
-            "en-indic"
-        )
-
-    # Unsupported IndicTrans2 language combination:
-    # Try an installed direct Argos translation pair.
-    return argos_translate(
-        text,
-        source_lang,
-        target_lang
+    return mymemory_translate(
+        text, source_lang, target_lang
     )
-
-
 # --------------------------------------------------
 # LANGUAGE AVAILABILITY
 # --------------------------------------------------
@@ -447,19 +566,23 @@ def get_supported_languages():
             available_codes.add(source.code)
             available_codes.add(target.to_lang.code)
 
-    # Check whether IndicTrans2 model files are cached.
-    en_indic_path = (
-        HF_CACHE
-        / "models--ai4bharat--indictrans2-en-indic-dist-200M"
-    )
+    # Check whether IndicTrans2 dependencies AND model files are cached.
+    if INDIC_AVAILABLE:
+        en_indic_path = (
+            HF_CACHE
+            / "models--ai4bharat--indictrans2-en-indic-dist-200M"
+        )
 
-    indic_en_path = (
-        HF_CACHE
-        / "models--ai4bharat--indictrans2-indic-en-dist-200M"
-    )
+        indic_en_path = (
+            HF_CACHE
+            / "models--ai4bharat--indictrans2-indic-en-dist-200M"
+        )
 
-    has_en_indic = en_indic_path.exists()
-    has_indic_en = indic_en_path.exists()
+        has_en_indic = en_indic_path.exists()
+        has_indic_en = indic_en_path.exists()
+    else:
+        has_en_indic = False
+        has_indic_en = False
 
     indic_codes = set(INDIC_LANGUAGE_CODES)
 

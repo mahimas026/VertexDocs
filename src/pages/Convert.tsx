@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import "./Convert.css";
+import { convertDocument } from "../services/convertApi";
 
 type CompressionLevel = "none" | "low" | "medium" | "high";
 
@@ -85,6 +86,10 @@ function Convert() {
   const compressionRunRef = useRef(0);
 
   const [file, setFile] = useState<File | null>(null);
+  const [convertedFile, setConvertedFile] = useState<{
+  blob: Blob;
+  fileName: string;
+} | null>(null);
   const [format, setFormat] = useState("PDF");
   const [compressionLevel, setCompressionLevel] =
     useState<CompressionLevel>("none");
@@ -97,7 +102,16 @@ function Convert() {
   const [status, setStatus] = useState("");
   const [converting, setConverting] = useState(false);
 
-  const formats = ["PDF", "DOCX", "TXT", "PNG", "JPG"];
+  const extension = file?.name.split(".").pop()?.toLowerCase() || "";
+
+const formats =
+  extension === "pdf"
+    ? ["TXT", "DOCX"]
+    : extension === "docx"
+      ? ["TXT", "PDF"]
+      : extension === "txt"
+        ? ["PDF"]
+        : ["PDF"];
   const imageType = file ? getImageType(file) : null;
   const matchingImageOutput =
     (imageType === "image/png" && format === "PNG") ||
@@ -110,49 +124,71 @@ function Convert() {
       high: 0.5,
     };
 
-  const handleFile = (selectedFile?: File) => {
-    if (!selectedFile) return;
+  
+const handleFile = (selectedFile?: File) => {
+  if (!selectedFile) return;
 
-    if (selectedFile.size > 20 * 1024 * 1024) {
-      setStatus("File size must be below 20 MB.");
-      return;
-    }
+  if (selectedFile.size > 20 * 1024 * 1024) {
+    setStatus("File size must be below 20 MB.");
+    return;
+  }
 
-    compressionRunRef.current += 1;
-    setCompressing(false);
-    setFile(selectedFile);
+  const extension =
+    selectedFile.name.split(".").pop()?.toLowerCase() || "";
+
+  if (extension === "pdf") {
+    setFormat("TXT");
+  } else if (extension === "docx") {
+    setFormat("TXT");
+  } else if (extension === "txt") {
+    setFormat("PDF");
+  } else if (["png", "jpg", "jpeg"].includes(extension)) {
+    setFormat("PDF");
+  } else {
+    setStatus("Unsupported file format.");
+    return;
+  }
+
+  compressionRunRef.current += 1;
+  setCompressing(false);
+  setFile(selectedFile);
+  setConvertedFile(null);
+  setProgress(0);
+  setStatus("");
+  setCompressionProgress(0);
+  setCompressionStatus("");
+  setCompressionResult(null);
+};
+
+  
+const startConversion = async () => {
+  if (!file) {
+    setStatus("Please select a file first.");
+    return;
+  }
+
+  setConverting(true);
+  setProgress(10);
+  setStatus("");
+  setConvertedFile(null);
+
+  try {
+    const result = await convertDocument(file, format);
+
+    setConvertedFile(result);
+    setProgress(100);
+    setStatus("Conversion completed successfully!");
+  } catch (error) {
     setProgress(0);
-    setStatus("");
-    setCompressionProgress(0);
-    setCompressionStatus("");
-    setCompressionResult(null);
-  };
-
-  const startConversion = () => {
-    if (!file) {
-      setStatus("Please select a file first.");
-      return;
-    }
-
-    setConverting(true);
-    setProgress(0);
-    setStatus("");
-
-    let value = 0;
-
-    const interval = setInterval(() => {
-      value += 10;
-      setProgress(value);
-
-      if (value >= 100) {
-        clearInterval(interval);
-        setConverting(false);
-        setStatus(
-          "Demo conversion completed. Actual format conversion requires backend integration."
-        );
-      }
-    }, 300);
-  };
+    setStatus(
+      error instanceof Error
+        ? error.message
+        : "File conversion failed. Please try again."
+    );
+  } finally {
+    setConverting(false);
+  }
+};
 
   const startCompression = async () => {
     if (!file) {
@@ -264,23 +300,24 @@ function Convert() {
     URL.revokeObjectURL(url);
   };
 
-  const downloadDemo = () => {
-    if (!file) return;
+  
+const downloadDemo = () => {
+  if (!convertedFile) {
+    setStatus("Please convert the file before downloading.");
+    return;
+  }
 
-    const blob = new Blob(
-      [`Demo conversion output for ${file.name} to ${format}.\nActual conversion is not connected yet.`],
-      { type: "text/plain" }
-    );
+  const url = URL.createObjectURL(convertedFile.blob);
+  const link = document.createElement("a");
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+  link.href = url;
+  link.download = convertedFile.fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 
-    link.href = url;
-    link.download = `converted-demo-${file.name}.txt`;
-    link.click();
-
-    URL.revokeObjectURL(url);
-  };
+  URL.revokeObjectURL(url);
+};
 
   const getIcon = () => {
     if (file?.type.startsWith("image/")) return <FileImage size={35} />;
