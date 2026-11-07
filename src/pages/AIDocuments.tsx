@@ -1,18 +1,40 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Bot,
   Send,
   User,
   FileText,
+  FileImage,
   Trash2,
   Paperclip,
+  X,
+  Copy,
+  Check,
+  AlertCircle,
+  RotateCcw,
+  Loader2,
+  UploadCloud,
+  Languages,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import type { AttachedDocument, ChatMessage, ReplyLanguage } from "../ai/types";
+import {
+  validateFile,
+  processAttachedFile,
+  formatFileSize,
+} from "../ai/extract";
+import { sendToLLM } from "../ai/llmClient";
+import { MarkdownRenderer } from "../ai/markdown";
+import {
+  getVoiceLanguageTag,
+  speakText,
+  stopSpeaking,
+} from "../ai/voice";
+import { useSpeechRecognition } from "../ai/useSpeechRecognition";
 import "./AIDocuments.css";
-
-interface Message {
-  role: "user" | "assistant";
-  text: string;
-}
 
 const suggestions = [
   "Summarize my document",
@@ -21,29 +43,294 @@ const suggestions = [
   "Generate questions from my document",
 ];
 
+let globalMsgCounter = 0;
+function createMessage(
+  role: "user" | "assistant",
+  text: string,
+  extra: Partial<ChatMessage> = {}
+): ChatMessage {
+  globalMsgCounter += 1;
+  return {
+    id: `${role}-${Date.now()}-${globalMsgCounter}`,
+    role,
+    text,
+    timestamp: Date.now(),
+    ...extra,
+  };
+}
+
 export default function AIDocuments() {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [attachments, setAttachments] = useState<AttachedDocument[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [fileError, setFileError] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [replyLanguage, setReplyLanguage] = useState<ReplyLanguage>("auto");
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
+  // Voice Assistant states
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [autoSendAfterSpeaking, setAutoSendAfterSpeaking] = useState(false);
+  const [autoReadReplies, setAutoReadReplies] = useState(false);
 
-    const userMessage = input.trim();
+  const isGroqConfigured = Boolean(
+    import.meta.env.VITE_GROQ_API_KEY &&
+      import.meta.env.VITE_GROQ_API_KEY !== "your_groq_key_here" &&
+      import.meta.env.VITE_GROQ_API_KEY.trim() !== ""
+  );
 
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: userMessage },
-      {
-        role: "assistant",
-        text: "This is a demo response. AI document analysis will be available after connecting the backend and AI service.",
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const autoReadRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    autoReadRef.current = autoReadReplies;
+  }, [autoReadReplies]);
+
+  // Auto-scroll to the bottom of the chat area on message update or loading state change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isLoading]);
+
+  // Adjust textarea height when input changes (e.g. from speech or reset)
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(
+        textareaRef.current.scrollHeight,
+        120
+      )}px`;
+    }
+  }, [input]);
+
+  const stopVoiceOutput = () => {
+    stopSpeaking();
+    setSpeakingMessageId(null);
+  };
+
+  const {
+    isListening,
+    voiceStatus,
+    isRecognitionSupported,
+    toggleVoiceInput,
+    stopVoiceInput,
+    notifyManualInput,
+  } = useSpeechRecognition({
+    input,
+    setInput,
+    replyLanguage,
+    autoSendAfterSpeaking,
+    onSend: (text) => void handleSend(text),
+    onBeforeStart: stopVoiceOutput,
+  });
+
+  // Clean up voice synthesis on unmount
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, []);
+
+  const toggleReadMessage = (messageId: string, text: string) => {
+    if (speakingMessageId === messageId) {
+      stopVoiceOutput();
+      return;
+    }
+
+    // Stop microphone if currently listening
+    stopVoiceInput();
+
+    setSpeakingMessageId(messageId);
+    const langTag = getVoiceLanguageTag(replyLanguage);
+
+    speakText(
+      text,
+      langTag,
+      () => {
+        setSpeakingMessageId((current) =>
+          current === messageId ? null : current
+        );
       },
-    ]);
+      () => {
+        setSpeakingMessageId((current) =>
+          current === messageId ? null : current
+        );
+      }
+    );
+  };
 
-    setInput("");
+  const handleFiles = async (filesToAdd: File[]) => {
+    setFileError("");
+    const validFiles: File[] = [];
+
+    for (const file of filesToAdd) {
+      const validation = validateFile(file);
+      if (!validation.valid) {
+        setFileError(validation.error || "Unsupported file or size exceeded.");
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (validFiles.length === 0) return;
+
+    // Process files
+    const processed = await Promise.all(
+      validFiles.map((file) => processAttachedFile(file))
+    );
+
+    const validNewDocs: AttachedDocument[] = [];
+    for (const doc of processed) {
+      if (doc.status === "error") {
+        setFileError(doc.error || "I couldn't read any text from this file.");
+      } else {
+        validNewDocs.push(doc);
+      }
+    }
+
+    if (validNewDocs.length > 0) {
+      setAttachments((prev) => {
+        const existingNames = new Set(prev.map((d) => d.name));
+        const filteredNew = validNewDocs.filter((d) => !existingNames.has(d.name));
+        return [...prev, ...filteredNew];
+      });
+    }
+  };
+
+  const handleFileInputChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await handleFiles(Array.from(e.target.files));
+    }
+    // Reset so the same file can be re-selected if removed
+    e.target.value = "";
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((doc) => doc.id !== id));
   };
 
   const clearChat = () => {
+    stopVoiceInput();
+    stopVoiceOutput();
     setMessages([]);
+    setAttachments([]);
+    setFileError("");
+    setInput("");
+    notifyManualInput("");
+    setReplyLanguage("auto");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+  };
+
+  const handleSend = async (forcedPrompt?: string) => {
+    // Automatically stop listening when message is sent
+    stopVoiceInput();
+
+    const promptToSend = (forcedPrompt ?? input).trim();
+    if (!promptToSend && attachments.length === 0) return;
+    if (isLoading) return;
+
+    const userMessageText = promptToSend || "Analyze the attached document(s)";
+
+    const userMessage = createMessage("user", userMessageText);
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    notifyManualInput("");
+    setFileError("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+    setIsLoading(true);
+
+    try {
+      const response = await sendToLLM(
+        userMessageText,
+        attachments,
+        messages,
+        replyLanguage
+      );
+
+      const assistantMessage = createMessage("assistant", response);
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // Auto-read reply aloud if toggle is ON
+      if (autoReadRef.current) {
+        toggleReadMessage(assistantMessage.id, response);
+      }
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An unexpected error occurred.";
+
+      const errorReply = createMessage("assistant", errorMessage, {
+        isError: true,
+        canRetry: true,
+        retryPrompt: userMessageText,
+      });
+
+      setMessages((prev) => [...prev, errorReply]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRetry = (promptToRetry: string) => {
+    // Remove the last error message and retry
+    setMessages((prev) => {
+      const lastIndex = prev.length - 1;
+      if (lastIndex >= 0 && prev[lastIndex].isError) {
+        return prev.slice(0, lastIndex);
+      }
+      return prev;
+    });
+    void handleSend(promptToRetry);
+  };
+
+  const copyToClipboard = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => {
+        setCopiedId((current) => (current === id ? null : current));
+      }, 2000);
+    } catch {
+      // Fallback or ignore
+    }
+  };
+
+  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    notifyManualInput(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(
+        textareaRef.current.scrollHeight,
+        120
+      )}px`;
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void handleSend();
+    }
+  };
+
+  const renderFileIcon = (extension: string) => {
+    if (["png", "jpg", "jpeg"].includes(extension)) {
+      return <FileImage size={14} />;
+    }
+    return <FileText size={14} />;
   };
 
   return (
@@ -54,13 +341,41 @@ export default function AIDocuments() {
           <p>Your intelligent assistant for understanding documents.</p>
         </div>
 
-        <button className="clear-chat" onClick={clearChat}>
+        <button className="clear-chat" onClick={clearChat} type="button">
           <Trash2 size={16} />
           Clear Chat
         </button>
       </div>
 
-      <div className="ai-workspace">
+      <div
+        className={`ai-workspace ${isDragging ? "ai-dragging" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            void handleFiles(Array.from(e.dataTransfer.files));
+          }
+        }}
+      >
+        {isDragging && (
+          <div className="ai-drag-overlay">
+            <UploadCloud size={48} />
+            <p>Drop documents to attach (.pdf, .docx, .txt, .png, .jpg)</p>
+          </div>
+        )}
+
         <div className="ai-chat-header">
           <div className="ai-bot-icon">
             <Bot size={24} />
@@ -68,7 +383,9 @@ export default function AIDocuments() {
 
           <div>
             <h3>Vertex AI Assistant</h3>
-            <span className="ai-status">Frontend demo</span>
+            <span className="ai-status">
+              {isGroqConfigured ? "Powered by Groq" : "Frontend demo"}
+            </span>
           </div>
         </div>
 
@@ -160,7 +477,8 @@ export default function AIDocuments() {
                 {suggestions.map((suggestion) => (
                   <button
                     key={suggestion}
-                    onClick={() => setInput(suggestion)}
+                    type="button"
+                    onClick={() => void handleSend(suggestion)}
                   >
                     <span className="ai-suggestion-icon">
                       <FileText size={17} />
@@ -172,9 +490,9 @@ export default function AIDocuments() {
             </div>
           ) : (
             <div className="ai-messages">
-              {messages.map((message, index) => (
+              {messages.map((message) => (
                 <div
-                  key={index}
+                  key={message.id}
                   className={`ai-message ${
                     message.role === "user" ? "user-message" : "bot-message"
                   }`}
@@ -187,46 +505,308 @@ export default function AIDocuments() {
                     )}
                   </div>
 
-                  <div className="message-content">
-                    <strong>
-                      {message.role === "user" ? "You" : "Vertex AI"}
-                    </strong>
-                    <p>{message.text}</p>
+                  <div
+                    className={`message-content ${
+                      message.isError ? "ai-message-content-error" : ""
+                    }`}
+                  >
+                    {message.isError ? (
+                      <div className="ai-error-box">
+                        <div className="ai-error-text">
+                          <AlertCircle size={16} />
+                          <span>{message.text}</span>
+                        </div>
+                        {message.canRetry && message.retryPrompt && (
+                          <button
+                            type="button"
+                            className="ai-retry-button"
+                            onClick={() => handleRetry(message.retryPrompt!)}
+                          >
+                            <RotateCcw size={13} />
+                            <span>Retry</span>
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="ai-message-header">
+                          <strong>
+                            {message.role === "user" ? "You" : "Vertex AI"}
+                          </strong>
+                          {message.role === "assistant" && (
+                            <div className="ai-message-actions">
+                              <button
+                                type="button"
+                                className={`ai-speak-button ${
+                                  speakingMessageId === message.id ? "is-speaking" : ""
+                                }`}
+                                onClick={() =>
+                                  toggleReadMessage(message.id, message.text)
+                                }
+                                aria-label={
+                                  speakingMessageId === message.id
+                                    ? "Stop reading aloud"
+                                    : "Read message aloud"
+                                }
+                                title={
+                                  speakingMessageId === message.id
+                                    ? "Stop reading"
+                                    : "Read aloud"
+                                }
+                              >
+                                {speakingMessageId === message.id ? (
+                                  <>
+                                    <VolumeX size={13} />
+                                    <span>Stop</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Volume2 size={13} />
+                                    <span>Read</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="ai-copy-button"
+                                onClick={() =>
+                                  void copyToClipboard(message.id, message.text)
+                                }
+                                aria-label="Copy response"
+                                title="Copy response"
+                              >
+                                {copiedId === message.id ? (
+                                  <>
+                                    <Check size={13} />
+                                    <span>Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy size={13} />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {message.role === "assistant" ? (
+                          <MarkdownRenderer content={message.text} />
+                        ) : (
+                          <p>{message.text}</p>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
+
+              {isLoading && (
+                <div className="ai-message bot-message ai-typing-row">
+                  <div className="message-avatar">
+                    <Bot size={18} />
+                  </div>
+                  <div className="message-content ai-typing-content">
+                    <div className="ai-message-header">
+                      <strong>Vertex AI</strong>
+                    </div>
+                    <div className="ai-typing-indicator">
+                      <span className="ai-typing-dot" />
+                      <span className="ai-typing-dot" />
+                      <span className="ai-typing-dot" />
+                      <span className="ai-typing-label">
+                        Vertex AI is thinking...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
           )}
         </div>
 
+        {/* Inline file error */}
+        {fileError && (
+          <div className="ai-file-error" role="alert">
+            <AlertCircle size={16} />
+            <span>{fileError}</span>
+            <button
+              type="button"
+              onClick={() => setFileError("")}
+              aria-label="Dismiss error"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Attached files chips */}
+        {attachments.length > 0 && (
+          <div className="ai-attachment-chips" aria-label="Attached files">
+            {attachments.map((doc) => (
+              <div
+                key={doc.id}
+                className={`ai-attachment-chip ${
+                  doc.status === "error" ? "chip-error" : ""
+                }`}
+              >
+                <span className="chip-icon">{renderFileIcon(doc.extension)}</span>
+                <span className="chip-name" title={doc.name}>
+                  {doc.name}
+                </span>
+                <span className="chip-size">{formatFileSize(doc.size)}</span>
+                {doc.status === "processing" ? (
+                  <Loader2 size={13} className="chip-spinner" />
+                ) : (
+                  <button
+                    type="button"
+                    className="chip-remove"
+                    onClick={() => removeAttachment(doc.id)}
+                    aria-label={`Remove ${doc.name}`}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Input area */}
         <div className="ai-input-area">
-          <button
-            className="attach-button"
-            title="Attach document (not available in demo)"
-            aria-label="Attach document"
-            disabled
-          >
-            <Paperclip size={20} />
-          </button>
+          <div className="ai-input-toolbar">
+            <div className="ai-toolbar-left">
+              <div className="ai-lang-selector-pill">
+                <label htmlFor="ai-reply-lang-select" className="ai-lang-label">
+                  <Languages size={14} />
+                  <span>Reply in</span>
+                </label>
+                <select
+                  id="ai-reply-lang-select"
+                  className="ai-lang-select"
+                  value={replyLanguage}
+                  onChange={(e) =>
+                    setReplyLanguage(e.target.value as ReplyLanguage)
+                  }
+                  aria-label="Reply in"
+                  disabled={isLoading}
+                >
+                  <option value="auto">Auto (same as my question)</option>
+                  <option value="english">English</option>
+                  <option value="tamil">Tamil (தமிழ்)</option>
+                  <option value="tanglish">Tanglish (Tamil in English letters)</option>
+                  <option value="hindi">Hindi (हिन्दी)</option>
+                  <option value="japanese">Japanese (日本語)</option>
+                  <option value="german">German (Deutsch)</option>
+                </select>
+              </div>
 
-          <input
-            type="text"
-            placeholder="Ask anything about your document..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") sendMessage();
-            }}
-          />
+              <div className="ai-voice-toggles">
+                <label
+                  className="ai-toggle-label"
+                  title="Auto-send message after you finish speaking"
+                >
+                  <input
+                    type="checkbox"
+                    checked={autoSendAfterSpeaking}
+                    onChange={(e) => setAutoSendAfterSpeaking(e.target.checked)}
+                    aria-label="Auto-send after speaking"
+                  />
+                  <span>Auto-send</span>
+                </label>
 
-          <button
-            className="send-button"
-            onClick={sendMessage}
-            disabled={!input.trim()}
-            aria-label="Send message"
-          >
-            <Send size={19} />
-          </button>
+                <label
+                  className="ai-toggle-label"
+                  title="Automatically read assistant responses aloud"
+                >
+                  <input
+                    type="checkbox"
+                    checked={autoReadReplies}
+                    onChange={(e) => setAutoReadReplies(e.target.checked)}
+                    aria-label="Auto-read replies"
+                  />
+                  <span>Auto-read</span>
+                </label>
+              </div>
+            </div>
+
+            {voiceStatus && (
+              <div
+                className={`ai-voice-status ${
+                  isListening ? "is-listening" : "is-error"
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                {isListening && <span className="ai-voice-pulse" />}
+                <span>{voiceStatus}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="ai-input-row">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
+              onChange={(e) => void handleFileInputChange(e)}
+            />
+
+            <button
+              type="button"
+              className="attach-button"
+              title="Attach documents (.pdf, .docx, .txt, .png, .jpg)"
+              aria-label="Attach document"
+              disabled={isLoading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip size={20} />
+            </button>
+
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              placeholder="Ask anything about your document..."
+              value={input}
+              onChange={handleTextareaInput}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading}
+              aria-label="Ask about document"
+            />
+
+            <button
+              type="button"
+              className={`mic-button ${isListening ? "is-listening" : ""}`}
+              title={
+                !isRecognitionSupported
+                  ? "Voice input works in Chrome or Edge"
+                  : isListening
+                  ? "Stop listening"
+                  : "Voice input (speak)"
+              }
+              aria-label={isListening ? "Stop listening" : "Start voice input"}
+              disabled={isLoading || !isRecognitionSupported}
+              onClick={toggleVoiceInput}
+            >
+              {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+            </button>
+
+            <button
+              type="button"
+              className="send-button"
+              onClick={() => void handleSend()}
+              disabled={(!input.trim() && attachments.length === 0) || isLoading}
+              aria-label="Send message"
+            >
+              <Send size={19} />
+            </button>
+          </div>
         </div>
 
         <p className="ai-disclaimer">
