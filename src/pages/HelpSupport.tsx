@@ -1,3 +1,4 @@
+import "./HelpSupport.css";
 import { useState } from "react";
 import {
   HelpCircle,

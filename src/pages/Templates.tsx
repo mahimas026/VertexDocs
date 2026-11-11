@@ -1,3 +1,4 @@
+import "./LanguageBridge.css";
 import { useRef, useState } from "react";
 import {
   AlignCenter,

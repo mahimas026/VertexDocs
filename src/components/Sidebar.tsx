@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+
 import {
   LayoutDashboard,
   FileText,
@@ -14,6 +15,7 @@ import {
 function Sidebar() {
   return (
     <aside className="sidebar">
+
       <div className="logo">
         <div className="logo-icon">V</div>
         <h2>Vertex Docs</h2>
@@ -23,45 +25,55 @@ function Sidebar() {
 
       <nav>
         <NavLink to="/" end>
-          <LayoutDashboard /> Dashboard
+          <LayoutDashboard />
+          Dashboard
         </NavLink>
 
         <NavLink to="/upload">
-          <Upload /> Upload Documents
+          <Upload />
+          Upload Documents
         </NavLink>
 
         <NavLink to="/pdf-studio">
-          <FileText /> PDF Studio
+          <FileText />
+          PDF Studio
         </NavLink>
 
         <NavLink to="/language-bridge">
-          <Languages /> Language Bridge
+          <Languages />
+          Language Bridge
         </NavLink>
 
         <NavLink to="/convert">
-          <RefreshCw /> Convert Files
+          <RefreshCw />
+          Convert Files
         </NavLink>
 
         <NavLink to="/templates">
-          <Files /> Templates
+          <Files />
+          Templates
         </NavLink>
 
         <NavLink to="/ai-documents">
-          <Bot /> AI Documents
+          <Bot />
+          AI Documents
         </NavLink>
       </nav>
 
       <div className="sidebar-bottom">
-      <NavLink to="/help-support">
-  <HelpCircle />
-  Help & Support
-</NavLink>
 
-<NavLink to="/account">
-  <Settings />
-  Account Settings
-</NavLink>
+        <NavLink to="/help-support">
+          <HelpCircle />
+          Help & Support
+        </NavLink>
+
+        <NavLink to="/account">
+          <Settings />
+          Account Settings
+        </NavLink>
+
       </div>
+
     </aside>
   );
 }
