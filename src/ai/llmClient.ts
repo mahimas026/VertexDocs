@@ -69,9 +69,7 @@ function getLanguageInstruction(language: ReplyLanguage = "auto"): string {
 }
 
 /**
- * TODO: In production, route requests through a backend proxy endpoint (e.g. POST /api/chat)
- * to keep the Groq API key secure and prevent exposure in client-side bundles.
- * Only this sendToLLM function needs to be updated to target the backend proxy URL.
+ * Groq requests go through the backend so the API key stays out of the browser bundle.
  */
 export async function sendToLLM(
   prompt: string,
@@ -100,13 +98,6 @@ export async function sendToLLM(
     return "Please attach a document first using the paperclip icon.";
   }
 
-  // Read and clean API key (removing surrounding quotes if present)
-  const rawApiKey = import.meta.env.VITE_GROQ_API_KEY || "";
-  const apiKey = rawApiKey
-    .trim()
-    .replace(/^["']|["']$/g, "")
-    .trim();
-
   // Read model from env, trimmed with surrounding quotes removed, defaulting to llama-3.3-70b-versatile
   const rawModel = import.meta.env.VITE_GROQ_MODEL || "llama-3.3-70b-versatile";
   const model =
@@ -114,24 +105,6 @@ export async function sendToLLM(
       .trim()
       .replace(/^["']|["']$/g, "")
       .trim() || "llama-3.3-70b-versatile";
-
-  // Base URL with default https://api.groq.com/openai/v1 and trailing slashes stripped
-  const rawBaseUrl = (
-    import.meta.env.VITE_GROQ_BASE_URL || "https://api.groq.com/openai/v1"
-  )
-    .trim()
-    .replace(/^["']|["']$/g, "")
-    .trim();
-  const baseUrl = (rawBaseUrl || "https://api.groq.com/openai/v1").replace(
-    /\/+$/,
-    ""
-  );
-
-  if (!apiKey || apiKey === "your_groq_key_here") {
-    throw new Error(
-      "Groq API key is not configured. Set VITE_GROQ_API_KEY in your .env file and restart npm run dev."
-    );
-  }
 
   // 3. Prepare document text with language-dependent budget limits
   let wasTruncated = false;
@@ -199,18 +172,14 @@ export async function sendToLLM(
     userMessage,
   ];
 
-  // 6. Call Groq OpenAI-compatible chat completions endpoint (${baseUrl}/chat/completions)
-  const endpoint = `${baseUrl}/chat/completions`;
-
-  // Log model name and base URL once per request (never log the API key)
-  console.log(`[Groq Client] Using model: "${model}", Base URL: "${baseUrl}"`);
+  // 6. Call the backend proxy; the Groq API key remains server-side.
+  const endpoint = "http://127.0.0.1:8001/api/chat/completions";
 
   let response: Response;
   try {
     response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -252,7 +221,7 @@ export async function sendToLLM(
     if (response.status === 401) {
       throw new Error(
         appendGroqError(
-          "Invalid Groq API key. Please check your VITE_GROQ_API_KEY setting in .env."
+          "Groq rejected the backend API key. Check GROQ_API_KEY in .env."
         )
       );
     }

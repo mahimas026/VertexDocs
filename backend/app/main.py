@@ -7,6 +7,7 @@ from app.routes.documents import router as documents_router
 from app.routes.convert import router as convert_router
 from app.routes.pdf_operations import router as pdf_operations_router
 from app.routes.translation import router as translation_router
+from app.routes.groq import router as groq_router
 
 
 app = FastAPI(
@@ -24,7 +25,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -35,6 +38,7 @@ app.add_middleware(
 # Register API routes
 app.include_router(documents_router)
 app.include_router(convert_router)
+app.include_router(groq_router)
 
 app.include_router(
     pdf_operations_router,

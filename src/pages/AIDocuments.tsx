@@ -74,11 +74,7 @@ export default function AIDocuments() {
   const [autoSendAfterSpeaking, setAutoSendAfterSpeaking] = useState(false);
   const [autoReadReplies, setAutoReadReplies] = useState(false);
 
-  const isGroqConfigured = Boolean(
-    import.meta.env.VITE_GROQ_API_KEY &&
-      import.meta.env.VITE_GROQ_API_KEY !== "your_groq_key_here" &&
-      import.meta.env.VITE_GROQ_API_KEY.trim() !== ""
-  );
+  const [isGroqConfigured, setIsGroqConfigured] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -89,6 +85,13 @@ export default function AIDocuments() {
   useEffect(() => {
     autoReadRef.current = autoReadReplies;
   }, [autoReadReplies]);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8001/api/chat/status")
+      .then((response) => response.json())
+      .then((status) => setIsGroqConfigured(Boolean(status.configured)))
+      .catch(() => setIsGroqConfigured(false));
+  }, []);
 
   // Auto-scroll to the bottom of the chat area on message update or loading state change
   useEffect(() => {

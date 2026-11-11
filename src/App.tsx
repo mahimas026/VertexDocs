@@ -12,6 +12,7 @@ import Templates from "./pages/Templates";
 import AIDocuments from "./pages/AIDocuments";
 import Account from "./pages/Account";
 import HelpSupport from "./pages/HelpSupport";
+import FloatingAssistant from "./components/FloatingAssistant";
 
 import { ThemeProvider } from "./context/ThemeContext";
 
@@ -47,6 +48,7 @@ function App() {
         </main>
 
       </div>
+      <FloatingAssistant />
     </ThemeProvider>
   );
 }
