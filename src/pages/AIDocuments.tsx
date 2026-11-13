@@ -87,7 +87,7 @@ export default function AIDocuments() {
   }, [autoReadReplies]);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8001/api/chat/status")
+    fetch("http://127.0.0.1:8000/api/chat/status")
       .then((response) => response.json())
       .then((status) => setIsGroqConfigured(Boolean(status.configured)))
       .catch(() => setIsGroqConfigured(false));

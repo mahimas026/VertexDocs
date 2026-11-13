@@ -173,7 +173,7 @@ export async function sendToLLM(
   ];
 
   // 6. Call the backend proxy; the Groq API key remains server-side.
-  const endpoint = "http://127.0.0.1:8001/api/chat/completions";
+  const endpoint = "http://127.0.0.1:8000/api/chat/completions";
 
   let response: Response;
   try {

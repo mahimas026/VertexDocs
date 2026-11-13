@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { NavLink } from "react-router-dom";
 
 import {
@@ -13,17 +15,40 @@ import {
 } from "lucide-react";
 
 function Sidebar() {
+
+  const [logoError, setLogoError] = useState(false);
+
   return (
     <aside className="sidebar">
 
-      <div className="logo">
-        <div className="logo-icon">V</div>
-        <h2>Vertex Docs</h2>
-      </div>
+      {/* COMPANY LOGO */}
 
-      <p className="menu-label">WORKSPACE</p>
+      {!logoError ? (
+
+        <img
+          src="/company-logo-transparent.png"
+          alt="Company Logo"
+          className="company-logo"
+
+          onError={() => setLogoError(true)}
+        />
+
+      ) : (
+
+        <div className="company-logo-fallback">
+          VertexDocs
+        </div>
+
+      )}
+
+      {/* WORKSPACE */}
+
+      <p className="menu-label">
+        WORKSPACE
+      </p>
 
       <nav>
+
         <NavLink to="/" end>
           <LayoutDashboard />
           Dashboard
@@ -58,7 +83,10 @@ function Sidebar() {
           <Bot />
           AI Documents
         </NavLink>
+
       </nav>
+
+      {/* SIDEBAR BOTTOM */}
 
       <div className="sidebar-bottom">
 

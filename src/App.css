@@ -976,21 +976,6 @@ body {
    GLOBAL THEME SELECTOR
 ========================================= */
 
-.global-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 900;
-
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-
-  min-height: 58px;
-  margin: -35px -35px 20px;
-  padding: 10px 35px;
-
-  background: var(--app-bg);
-}
 
 /* THEME BUTTON */
 
@@ -1320,4 +1305,84 @@ button {
   line-height: 1.4;
   padding-top: 2px;
   overflow: visible;
+}
+.company-logo {
+  width: 190px;
+  height: 65px;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 30px;
+}
+/* =========================================
+   FIXED THEME BUTTON - TOP RIGHT
+========================================= */
+
+.global-topbar {
+  position: fixed !important;
+
+  top: 18px !important;
+  right: 25px !important;
+  left: auto !important;
+  bottom: auto !important;
+
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+
+  background: transparent !important;
+
+  z-index: 99999;
+
+  transform: none !important;
+
+  pointer-events: none;
+}
+
+/* THEME BUTTON */
+
+.global-topbar .theme-switcher {
+  position: relative;
+  pointer-events: auto;
+}
+
+/* DROPDOWN */
+
+.global-topbar .theme-dropdown {
+  position: absolute !important;
+
+  top: calc(100% + 10px) !important;
+  right: 0 !important;
+  left: auto !important;
+
+  width: 340px;
+
+  max-height: calc(100vh - 90px);
+  overflow-y: auto;
+
+  z-index: 100000;
+}
+
+/* MOBILE */
+
+@media (max-width: 650px) {
+  .global-topbar {
+    position: fixed !important;
+    top: 12px !important;
+    right: 12px !important;
+    left: auto !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .global-topbar .theme-dropdown {
+    width: min(320px, calc(100vw - 40px));
+  }
 }
